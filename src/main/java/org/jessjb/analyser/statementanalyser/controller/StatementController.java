@@ -14,6 +14,8 @@ import java.util.Map;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.jessjb.analyser.statementanalyser.data.Transaction;
+import org.jessjb.analyser.statementanalyser.service.AnalysisService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,54 +35,23 @@ import technology.tabula.writers.CSVWriter;
 @CrossOrigin
 @RestController
 public class StatementController {
+	
+	@Autowired
+	AnalysisService analysisService;
+	
 	List<Transaction> tList = new ArrayList<Transaction>();
 
 	@GetMapping("/getExpenseData")
-	public List<Transaction> test() {
+	public Map<String,Object> getExpenseData() {
 		File pdfFile = new File(
 				"C:\\Users\\jessj\\Downloads\\5010XXXXXX0260_4d008e10_30Sep2018_TO_26Jun2020_084838941_unlocked.pdf");
 		if (tList.isEmpty()) {
-			try {
-				PDDocument pdfDocument = PDDocument.load(pdfFile);
-				ObjectExtractor extractor = new ObjectExtractor(pdfDocument);
-				Map<Integer, List<Rectangle>> detectedTables = new HashMap<>();
-				NurminenDetectionAlgorithm detectionAlgorithm = new NurminenDetectionAlgorithm();
-				SpreadsheetExtractionAlgorithm se = new SpreadsheetExtractionAlgorithm();
-				PageIterator pages = extractor.extract();
-				while (pages.hasNext()) {
-					Page page = pages.next();
-					List<Rectangle> tablesOnPage = detectionAlgorithm.detect(page);
-					if (tablesOnPage.size() > 0) {
-						detectedTables.put(new Integer(page.getPageNumber()), tablesOnPage);
-						System.out.println("Tables on Page " + page.getPageNumber() + " " + tablesOnPage.size());
-						Table table = se.extract(page).get(1);
-						for (List<RectangularTextContainer> row : table.getRows()) {
-							if (row.get(0).getText().equals("Date"))
-								continue;
-							Transaction t = new Transaction();
-							t.setTDate(new SimpleDateFormat("dd/MM/yyyy").parse(row.get(0).getText()));
-							t.setNarration(row.get(1).getText());
-							t.setRefNo(row.get(2).getText());
-							t.setValueDate(new SimpleDateFormat("dd/MM/yyyy").parse(row.get(3).getText()));
-							t.setWithdrawalAmount(new BigDecimal(row.get(4).getText().replaceAll(",", "")));
-							t.setDepositAmount(new BigDecimal(row.get(5).getText().replaceAll(",", "")));
-							t.setClosingBalance(new BigDecimal(row.get(6).getText().replaceAll(",", "")));
-							tList.add(t);
-						}
-					}
-				}
-				System.out.println("Found " + tList.size() + " Transactions");
-			} catch (InvalidPasswordException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (ParseException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+			tList = analysisService.readTransactions(pdfFile);
 		}
-		return tList;
+		Map<String,BigDecimal> summary = analysisService.getSummary(tList);
+		Map<String,Object> expenseData = new HashMap<String, Object>();
+		expenseData.put("transactionData",tList);
+		expenseData.put("summary",summary);
+		return expenseData;
 	}
 }
