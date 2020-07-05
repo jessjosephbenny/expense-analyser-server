@@ -12,10 +12,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
-import org.bouncycastle.jcajce.provider.asymmetric.edec.KeyFactorySpi.ED25519;
 import org.jessjb.analyser.statementanalyser.data.Transaction;
 import org.springframework.stereotype.Service;
 
@@ -30,7 +30,7 @@ import technology.tabula.extractors.SpreadsheetExtractionAlgorithm;
 
 @Service
 public class AnalysisService {
-	public List<Transaction> readTransactions(File Filepath){
+	public List<Transaction> readTransactions(File Filepath) {
 		List<Transaction> tList = new ArrayList<Transaction>();
 		try {
 			PDDocument pdfDocument = PDDocument.load(Filepath);
@@ -62,6 +62,7 @@ public class AnalysisService {
 				}
 			}
 			System.out.println("Found " + tList.size() + " Transactions");
+			pdfDocument.close();
 		} catch (InvalidPasswordException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -72,13 +73,14 @@ public class AnalysisService {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-	return tList;
+		return tList;
 	}
-	public Map<String,BigDecimal> getSummary(List<Transaction> transactions){
-		Map<String,BigDecimal> summary = new HashMap<String, BigDecimal>();
+
+	public Map<String, BigDecimal> getSummary(List<Transaction> transactions) {
+		Map<String, BigDecimal> summary = new HashMap<String, BigDecimal>();
 		BigDecimal totalDeposit = new BigDecimal(0);
-		BigDecimal totalWithdrawal =new BigDecimal(0);
-		for(Transaction t : transactions) {
+		BigDecimal totalWithdrawal = new BigDecimal(0);
+		for (Transaction t : transactions) {
 			totalDeposit = totalDeposit.add(t.getDepositAmount());
 			totalWithdrawal = totalWithdrawal.add(t.getWithdrawalAmount());
 		}
@@ -86,11 +88,40 @@ public class AnalysisService {
 		summary.put("totalWithdrawal", totalWithdrawal);
 		summary.put("balance", totalDeposit.subtract(totalWithdrawal));
 		LocalDate sDate = transactions.get(0).getTDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-		LocalDate eDate = transactions.get(transactions.size()-1).getTDate().toInstant().atZone(ZoneId.systemDefault()).toLocalDate();
-		int months = Period.between(sDate,eDate).getYears()*12 + Period.between(sDate, eDate).getMonths();
-		System.out.println(sDate+" "+eDate+" "+months);
+		LocalDate eDate = transactions.get(transactions.size() - 1).getTDate().toInstant()
+				.atZone(ZoneId.systemDefault()).toLocalDate();
+		int months = Period.between(sDate, eDate).getYears() * 12 + Period.between(sDate, eDate).getMonths();
+		System.out.println(sDate + " " + eDate + " " + months);
 		summary.put("average", totalWithdrawal.divide(new BigDecimal(months)));
 		System.out.println(summary);
 		return summary;
+	}
+	
+	public void findUPITransactions(List<Transaction> transactions) {
+		List<Transaction> UPITransactions = new ArrayList<Transaction>();
+		Map<String,Map<String,BigDecimal>> uniqueUpiIds = new HashMap<String, Map<String,BigDecimal>>();
+		for (Transaction t : transactions) {
+			if(t.getNarration().contains("UPI")) {
+				UPITransactions.add(t);
+				//uniqueUpiIds.add(t.getNarration().split("-")[2]);
+			}	
+		}
+		for(Transaction t: UPITransactions) {
+			String upiID = t.getNarration().split("-")[2];
+			if (uniqueUpiIds.containsKey(upiID)){
+				Map<String,BigDecimal> transactionSumUp = uniqueUpiIds.get(upiID);
+				transactionSumUp.put("to", transactionSumUp.get("to").add(t.getWithdrawalAmount()));
+				transactionSumUp.put("from", transactionSumUp.get("from").add(t.getDepositAmount()));
+				uniqueUpiIds.replace(upiID, transactionSumUp);
+			}
+			else {
+				Map<String,BigDecimal> transactionSumUp = new HashMap<String, BigDecimal>();
+				transactionSumUp.put("to", t.getWithdrawalAmount());
+				transactionSumUp.put("from", t.getDepositAmount());
+				uniqueUpiIds.put(upiID, transactionSumUp);
+			}
+		}
+		Map<String,Map<String,BigDecimal>> uniqueUpiIdsSorted = new TreeMap<String, Map<String,BigDecimal>>(uniqueUpiIds);
+		System.out.println(uniqueUpiIdsSorted);
 	}
 }

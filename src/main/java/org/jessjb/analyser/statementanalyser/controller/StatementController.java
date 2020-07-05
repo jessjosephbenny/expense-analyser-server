@@ -18,7 +18,10 @@ import org.jessjb.analyser.statementanalyser.service.AnalysisService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import technology.tabula.HasText;
 import technology.tabula.ObjectExtractor;
@@ -49,9 +52,24 @@ public class StatementController {
 			tList = analysisService.readTransactions(pdfFile);
 		}
 		Map<String,BigDecimal> summary = analysisService.getSummary(tList);
+		analysisService.findUPITransactions(tList);
 		Map<String,Object> expenseData = new HashMap<String, Object>();
 		expenseData.put("transactionData",tList);
 		expenseData.put("summary",summary);
+		return expenseData;
+	}
+	@PostMapping("/uploadStatement")
+	public Map<String,Object> handleStatementUpload(@RequestParam("file") MultipartFile file ) throws IllegalStateException, IOException {
+		System.out.println(file.getOriginalFilename());
+		File pdfFile = new File(System.getProperty("java.io.tmpdir")+"/"+file.getOriginalFilename());
+		file.transferTo(pdfFile);
+		List<Transaction> tList = analysisService.readTransactions(pdfFile);
+		Map<String,BigDecimal> summary = analysisService.getSummary(tList);
+		analysisService.findUPITransactions(tList);
+		Map<String,Object> expenseData = new HashMap<String, Object>();
+		expenseData.put("transactionData",tList);
+		expenseData.put("summary",summary);
+		pdfFile.delete();
 		return expenseData;
 	}
 }
