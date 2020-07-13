@@ -52,10 +52,12 @@ public class StatementController {
 			tList = analysisService.readTransactions(pdfFile);
 		}
 		Map<String,BigDecimal> summary = analysisService.getSummary(tList);
-		analysisService.findUPITransactions(tList);
+		//analysisService.findUPITransactions(tList);
+		//analysisService.classifier1(tList);
 		Map<String,Object> expenseData = new HashMap<String, Object>();
 		expenseData.put("transactionData",tList);
 		expenseData.put("summary",summary);
+		expenseData.put("Classification", analysisService.classifier1(tList));
 		return expenseData;
 	}
 	@PostMapping("/uploadStatement")
@@ -63,12 +65,15 @@ public class StatementController {
 		System.out.println(file.getOriginalFilename());
 		File pdfFile = new File(System.getProperty("java.io.tmpdir")+"/"+file.getOriginalFilename());
 		file.transferTo(pdfFile);
-		List<Transaction> tList = analysisService.readTransactions(pdfFile);
+		if(tList.isEmpty()) {			
+			tList = analysisService.readTransactions(pdfFile);
+		}
 		Map<String,BigDecimal> summary = analysisService.getSummary(tList);
 		analysisService.findUPITransactions(tList);
 		Map<String,Object> expenseData = new HashMap<String, Object>();
 		expenseData.put("transactionData",tList);
 		expenseData.put("summary",summary);
+		expenseData.put("Classification", analysisService.classifier1(tList));
 		pdfFile.delete();
 		return expenseData;
 	}
