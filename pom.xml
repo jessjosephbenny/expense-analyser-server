@@ -27,12 +27,12 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
-			<exclusions>
-				<exclusion>
-					<groupId>ch.qos.logback</groupId>
-					<artifactId>logback-classic</artifactId>
-				</exclusion>
-			</exclusions>
+			<!-- <exclusions> -->
+			<!-- <exclusion> -->
+			<!-- <groupId>ch.qos.logback</groupId> -->
+			<!-- <artifactId>logback-classic</artifactId> -->
+			<!-- </exclusion> -->
+			<!-- </exclusions> -->
 		</dependency>
 
 		<dependency>
@@ -83,13 +83,6 @@
 			<artifactId>swagger-models</artifactId>
 			<version>${swagger-models.version}</version>
 		</dependency>
-<!-- 		<dependency>
-			<groupId>tabula</groupId>
-			<artifactId>tabula</artifactId>
-			<scope>system</scope>
-			<version>1.0.3</version>
-			<systemPath>${basedir}\lib\tabula-1.0.3-jar-with-dependencies.jar</systemPath>
-		</dependency> -->
 		<dependency>
 			<groupId>org.apache.pdfbox</groupId>
 			<artifactId>pdfbox</artifactId>
@@ -99,6 +92,11 @@
 			<groupId>technology.tabula</groupId>
 			<artifactId>tabula</artifactId>
 			<version>1.0.3</version>
+		</dependency>
+		<dependency>
+			<groupId>org.json</groupId>
+			<artifactId>json</artifactId>
+			<version>20180130</version>
 		</dependency>
 	</dependencies>
 

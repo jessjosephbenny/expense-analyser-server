@@ -13,6 +13,7 @@ import java.util.Map;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
+import org.jessjb.analyser.statementanalyser.data.Classification;
 import org.jessjb.analyser.statementanalyser.data.Transaction;
 import org.jessjb.analyser.statementanalyser.service.AnalysisService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,7 +58,10 @@ public class StatementController {
 		Map<String,Object> expenseData = new HashMap<String, Object>();
 		expenseData.put("transactionData",tList);
 		expenseData.put("summary",summary);
-		expenseData.put("Classification", analysisService.classifier1(tList));
+		Map<String,Classification> classification = analysisService.classifier(tList);
+		expenseData.put("Classification", classification);
+		expenseData.put("dailyUsage",analysisService.expenseDailyData(tList));
+		expenseData.put("UPI", analysisService.findUPITransactions(classification.get("Other").getTransactions()));
 		return expenseData;
 	}
 	@PostMapping("/uploadStatement")
@@ -69,11 +73,11 @@ public class StatementController {
 			tList = analysisService.readTransactions(pdfFile);
 		}
 		Map<String,BigDecimal> summary = analysisService.getSummary(tList);
-		analysisService.findUPITransactions(tList);
+		//analysisService.findUPITransactions(tList);
 		Map<String,Object> expenseData = new HashMap<String, Object>();
 		expenseData.put("transactionData",tList);
 		expenseData.put("summary",summary);
-		expenseData.put("Classification", analysisService.classifier1(tList));
+		expenseData.put("Classification", analysisService.classifier(tList));
 		pdfFile.delete();
 		return expenseData;
 	}
