@@ -27,6 +27,9 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ClassPathResource;
+
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
 import org.jessjb.analyser.statementanalyser.algo.NurminenDetectionAlgorithm1;
@@ -366,7 +369,8 @@ public class AnalysisService {
 		Map<String, ArrayList<String>> keyWords = new HashMap<String, ArrayList<String>>();
 		try {
 			Scanner sc;
-			sc = new Scanner(new File("C:\\keywords.csv"));
+			Resource resource = new ClassPathResource("keywords.csv");
+			sc = new Scanner(resource.getFile());
 			sc.useDelimiter("\n");
 			String categoryString = sc.next();
 			String[] category = categoryString.split(",");
@@ -390,6 +394,9 @@ public class AnalysisService {
 				}
 			}
 		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
