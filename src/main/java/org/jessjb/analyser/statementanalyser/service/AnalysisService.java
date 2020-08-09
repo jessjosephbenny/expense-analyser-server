@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.encryption.InvalidPasswordException;
+import org.jessjb.analyser.statementanalyser.algo.NurminenDetectionAlgorithm1;
 import org.jessjb.analyser.statementanalyser.data.Classification;
 import org.jessjb.analyser.statementanalyser.data.Transaction;
 import org.json.JSONObject;
@@ -42,46 +43,70 @@ import technology.tabula.Rectangle;
 import technology.tabula.RectangularTextContainer;
 import technology.tabula.Table;
 import technology.tabula.detectors.NurminenDetectionAlgorithm;
+import technology.tabula.extractors.BasicExtractionAlgorithm;
+import technology.tabula.extractors.ExtractionAlgorithm;
 import technology.tabula.extractors.SpreadsheetExtractionAlgorithm;
 
 @Service
 public class AnalysisService {
 	public List<Transaction> readTransactions(File Filepath) {
 		List<Transaction> tList = new ArrayList<Transaction>();
+		PDDocument pdfDocument = null;
 		try {
 			Map<String,ArrayList<String>> classificationKeyMap = getClassificationsFromFile();
-			PDDocument pdfDocument = PDDocument.load(Filepath);
+			pdfDocument = PDDocument.load(Filepath);
 			ObjectExtractor extractor = new ObjectExtractor(pdfDocument);
 			Map<Integer, List<Rectangle>> detectedTables = new HashMap<>();
+			ExtractionAlgorithm extractionAlgorithm = null;
 			NurminenDetectionAlgorithm detectionAlgorithm = new NurminenDetectionAlgorithm();
-			SpreadsheetExtractionAlgorithm se = new SpreadsheetExtractionAlgorithm();
+			SpreadsheetExtractionAlgorithm sea = new SpreadsheetExtractionAlgorithm();
+			BasicExtractionAlgorithm bea = new BasicExtractionAlgorithm();
 			PageIterator pages = extractor.extract();
 			while (pages.hasNext()) {
-				Page page = pages.next();
+				Page page = pages.next(); 
 				List<Rectangle> tablesOnPage = detectionAlgorithm.detect(page);
 				if (tablesOnPage.size() > 0) {
 					detectedTables.put(new Integer(page.getPageNumber()), tablesOnPage);
 					System.out.println("Tables on Page " + page.getPageNumber() + " " + tablesOnPage.size());
-					Table table = se.extract(page).get(1);
+					Rectangle geometicArea = tablesOnPage.get(0);
+						geometicArea.height+=1;
+						geometicArea.width+=1;
+					Page tableArea = page.getArea(geometicArea);
+					extractionAlgorithm = sea.isTabular(tableArea)?sea:bea;
+					Table table = extractionAlgorithm.extract(tableArea).get(0);
 					for (List<RectangularTextContainer> row : table.getRows()) {
 						if (row.get(0).getText().equals("Date"))
 							continue;
-						Transaction t = new Transaction();
-						t.setTDate(new SimpleDateFormat("dd/MM/yyyy").parse(row.get(0).getText()).toInstant()
-								.atZone(ZoneId.systemDefault()).toLocalDate());
-						t.setNarration(row.get(1).getText());
-						t.setRefNo(row.get(2).getText());
-						t.setValueDate(new SimpleDateFormat("dd/MM/yyyy").parse(row.get(3).getText()));
-						t.setWithdrawalAmount(new BigDecimal(row.get(4).getText().replaceAll(",", "")));
-						t.setDepositAmount(new BigDecimal(row.get(5).getText().replaceAll(",", "")));
-						t.setClosingBalance(new BigDecimal(row.get(6).getText().replaceAll(",", "")));
-						String[] category = findClassification(t, classificationKeyMap);
-						t.setCategory(category[0]);
-						t.setKeyword(category[1]);
-						tList.add(t);
-					}
+						if(row.get(0).getText().equals("")) {
+							Transaction t = tList.get(tList.size()-1);
+							t.setNarration(t.getNarration().concat(row.get(1).getText()));
+							tList.set(tList.size()-1, t);
+						}
+						else {
+							Transaction t = new Transaction();
+							t.setTDate(new SimpleDateFormat(row.get(0).getText().length()==10? "dd/MM/yyyy":"dd/MM/yy").parse(row.get(0).getText()).toInstant()
+									.atZone(ZoneId.systemDefault()).toLocalDate());
+							t.setNarration(row.get(1).getText());
+							t.setRefNo(row.get(2).getText());
+							t.setValueDate(new SimpleDateFormat(row.get(3).getText().length()==10? "dd/MM/yyyy":"dd/MM/yy").parse(row.get(3).getText()));
+							if(!row.get(4).getText().equals(""))
+								t.setWithdrawalAmount(new BigDecimal(row.get(4).getText().replaceAll(",", "")));
+							else
+								t.setWithdrawalAmount(new BigDecimal("0.00"));
+							if(!row.get(5).getText().equals(""))
+								t.setDepositAmount(new BigDecimal(row.get(5).getText().replaceAll(",", "")));
+							else
+								t.setDepositAmount(new BigDecimal("0.00"));
+							t.setClosingBalance(new BigDecimal(row.get(6).getText().replaceAll(",", "")));
+							String[] category = findClassification(t, classificationKeyMap);
+							t.setCategory(category[0]);
+							t.setKeyword(category[1]);
+							tList.add(t);
+						}
+					}		
 				}
 			}
+			System.out.println(tList.size()+" Rows Found");
 			pdfDocument.close();
 		} catch (InvalidPasswordException e) {
 			// TODO Auto-generated catch block
@@ -93,9 +118,16 @@ public class AnalysisService {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		finally {
+			try {
+				pdfDocument.close();
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
 		return tList;
 	}
-
 	public Map<String, BigDecimal> getSummary(List<Transaction> transactions) {
 		Map<String, BigDecimal> summary = new HashMap<String, BigDecimal>();
 		BigDecimal totalDeposit = new BigDecimal(0);
@@ -110,7 +142,7 @@ public class AnalysisService {
 		LocalDate sDate = transactions.get(0).getTDate();
 		LocalDate eDate = transactions.get(transactions.size() - 1).getTDate();
 		int months = Period.between(sDate, eDate).getYears() * 12 + Period.between(sDate, eDate).getMonths();
-		summary.put("average", totalWithdrawal.divide(new BigDecimal(months)));
+		summary.put("average", totalWithdrawal.divide(new BigDecimal(months==0?1:months)));
 		return summary;
 	}
 
@@ -141,75 +173,40 @@ public class AnalysisService {
 				uniqueUpiIds);
 		return uniqueUpiIdsSorted;
 	}
-
-	public Map<String, Classification> classifier(List<Transaction> transactions) {
-		Map<String, ArrayList<String>> keyWords = new HashMap<String, ArrayList<String>>();
-		String[] shoppingKeys = { "AMAZON", "FLIPKART", "BIGBASKET", "BRAND FACTORY", "TRENDS", "DECATHLON", "PROTEINS",
-				"FRUITS", "PAYTM" };
-		String[] travelKeys = { "IRCTC", "GOIBIBO", "UBER", "ABHIBUSS", "FUEL", "PETROLEUM", "RAILWAYS", "MAKEMYTRIP" };
-		String[] entertainmentKeys = { "CARNIVAL", "BOOKMYSHOW", "NETFLIX", "YOUTUBE", "HOTSTAR", "ORIGIN", "SPOTIFY",
-				"GOOGLE" };
-		String[] foodKeys = { "HOTEL", "SWIGGY", "ZOMATO", "CAKE", "FAASOS", "MC DONALDS", "TASMAC", "RESTAURANT",
-				"DOMINOS" };
-		String[] rentKeys = { "ZOLO", "RENT" };
-		String[] investmentKeys = { "ZERODHA" };
-		List<Transaction> shopping = new ArrayList<Transaction>();
-		List<Transaction> entertainment = new ArrayList<Transaction>();
-		List<Transaction> rent = new ArrayList<Transaction>();
-		List<Transaction> investment = new ArrayList<Transaction>();
-		List<Transaction> travel = new ArrayList<Transaction>();
-		List<Transaction> food = new ArrayList<Transaction>();
-		List<Transaction> others = new ArrayList<Transaction>();
-		for (Transaction t : transactions) {
-			String narration = t.getNarration();
-			if (searchForKey(shoppingKeys, narration))
-				shopping.add(t);
-			else if (searchForKey(travelKeys, narration))
-				travel.add(t);
-			else if (searchForKey(entertainmentKeys, narration))
-				entertainment.add(t);
-			else if (searchForKey(foodKeys, narration))
-				food.add(t);
-			else if (searchForKey(rentKeys, narration))
-				rent.add(t);
-			else if (searchForKey(investmentKeys, narration))
-				investment.add(t);
-			else
-				others.add(t);
+	
+	public Map<String,Classification> classifier(List<Transaction> transactions){
+		Map<String,Classification> classifications = new HashMap<String, Classification>();
+		for(Transaction t: transactions) {
+			String category =  t.getCategory();
+			if(classifications.containsKey(category)) {
+				Classification c = classifications.get(category);
+				c.setCount(c.getCount()+1);
+				c.setTotalExpense(c.getTotalExpense().add(t.getWithdrawalAmount()));
+				List<Transaction> cTransactions = c.getTransactions();
+				cTransactions.add(t);
+				c.setTransactions(cTransactions);
+				classifications.replace(category,c);
+			}
+			else {
+				Classification c = new Classification();
+				List<Transaction> cTransactions = new ArrayList<Transaction>();
+				cTransactions.add(t);
+				c.setName(category);
+				c.setTotalExpense(t.getWithdrawalAmount());
+				c.setCount(1);
+				c.setTransactions(cTransactions);
+				classifications.put(category, c);
+			}
 		}
-		BigDecimal shoppingTotal = findTotalExpense(shopping);
-		BigDecimal entertainmentTotal = findTotalExpense(entertainment);
-		BigDecimal travelTotal = findTotalExpense(travel);
-		BigDecimal foodTotal = findTotalExpense(food);
-		BigDecimal rentTotal = findTotalExpense(rent);
-		BigDecimal investmentTotal = findTotalExpense(investment);
-		BigDecimal otherTotal = findTotalExpense(others);
-		magicWordFinder(others);
-		BigDecimal total = shoppingTotal.add(entertainmentTotal).add(foodTotal).add(entertainmentTotal).add(travelTotal)
-				.add(rentTotal).add(investmentTotal).add(otherTotal);
-		Classification shoppingClassification = new Classification("Shopping", shoppingTotal,
-				findPercent(shoppingTotal, total), shopping.size(), shopping);
-		Classification entertainmentClassification = new Classification("Entertainment", entertainmentTotal,
-				findPercent(entertainmentTotal, total), entertainment.size(), entertainment);
-		Classification travelClassification = new Classification("Travel", travelTotal, findPercent(travelTotal, total),
-				travel.size(), travel);
-		Classification foodClassification = new Classification("Food", foodTotal, findPercent(foodTotal, total),
-				food.size(), food);
-		Classification rentClassification = new Classification("Rent", rentTotal, findPercent(rentTotal, total),
-				rent.size(), rent);
-		Classification investmentClassification = new Classification("Investment", investmentTotal,
-				findPercent(investmentTotal, total), investment.size(), investment);
-		Classification otherClassification = new Classification("Other", otherTotal, findPercent(otherTotal, total),
-				others.size(), others);
-		Map<String, Classification> classification = new HashMap<String, Classification>();
-		classification.put("Shopping", shoppingClassification);
-		classification.put("Entertainment", entertainmentClassification);
-		classification.put("Travel", travelClassification);
-		classification.put("Food", foodClassification);
-		classification.put("Rent", rentClassification);
-		classification.put("Investment", investmentClassification);
-		classification.put("Other", otherClassification);
-		return classification;
+		BigDecimal total = new BigDecimal("0.00");
+		for(String c: classifications.keySet()) {
+			total = total.add(classifications.get(c).getTotalExpense());
+		}
+		for(String c: classifications.keySet()) {
+			BigDecimal percent = findPercent(classifications.get(c).getTotalExpense(), total);
+			classifications.get(c).setPercent(percent);
+		}
+		return classifications;
 	}
 
 	public Boolean searchForKey(String[] keys, String narration) {
@@ -407,7 +404,10 @@ public class AnalysisService {
 			String keyWord = searchForKeyNew(keys, narration);
 			if(keyWord!=null) {
 				classification[0] = key;
-				classification[1] = keyWord;
+				if(keyWord.equals("UPI"))
+					classification[1] = narration.split("-").length<3?key:narration.split("-")[2];
+				else
+					classification[1] = keyWord;
 				break;
 			}
 		}

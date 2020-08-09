@@ -8,6 +8,9 @@ import lombok.Data;
 @Data
 @AllArgsConstructor
 public class Classification {
+	public Classification() {
+		// TODO Auto-generated constructor stub
+	}
 	String name;
 	BigDecimal totalExpense;
 	BigDecimal percent;
