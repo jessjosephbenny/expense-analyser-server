@@ -1,8 +1,10 @@
 package org.jessjb.analyser.statementanalyser.service.core;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.Period;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -13,7 +15,11 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.jessjb.analyser.statementanalyser.data.Transaction;
+import org.jessjb.analyser.statementanalyser.data.KeyWord;
 import org.springframework.stereotype.Service;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
 
 @Service
 public class AnalysisService {
@@ -31,15 +37,18 @@ public class AnalysisService {
 		LocalDate sDate = transactions.get(0).getTDate();
 		LocalDate eDate = transactions.get(transactions.size() - 1).getTDate();
 		int months = Period.between(sDate, eDate).getYears() * 12 + Period.between(sDate, eDate).getMonths();
-		summary.put("average", totalWithdrawal.divide(new BigDecimal(months==0?1:months)));
+		summary.put("average",
+				totalWithdrawal.divide(new BigDecimal(months == 0 ? 1 : months), 2, RoundingMode.HALF_UP));
 		return summary;
 	}
-		
-	public void magicWordFinder(List<Transaction> otherList) {
+
+	public void magicWordFinder(List<Transaction> tList) {
+		List<Transaction> otherList = tList.stream().filter(t -> t.getCategory().equals("Other"))
+				.collect(Collectors.toList());
 		Map<String, Integer> countMap = new HashMap<String, Integer>();
 		otherList.forEach(transaction -> {
 			String narration = transaction.getNarration();
-			for (String word : narration.split(" ")) {
+			for (String word : narration.split("[,| |-|_]")) {
 				if (countMap.containsKey(word))
 					countMap.replace(word, countMap.get(word) + 1);
 				else
@@ -56,6 +65,28 @@ public class AnalysisService {
 		for (Map.Entry<String, Integer> a : list) {
 			temp.put(a.getKey(), a.getValue());
 		}
+		System.out.println(temp);
+	}
+
+	public ArrayList<KeyWord> findTopKeyword(List<Transaction> transactions) {
+
+		Map<String,KeyWord> topKeyWords = new HashMap<String, KeyWord>();
+		transactions.stream().filter(t -> !t.getCategory().equals("Other")).forEach(t -> {
+			if (topKeyWords.containsKey(t.getKeyword())) {
+				//topKeyWords.replace(t.getKeyword(), topKeyWords.get(t.getKeyword()).value.add(t.getWithdrawalAmount()));
+				topKeyWords.get(t.getKeyword()).setValue(topKeyWords.get(t.getKeyword()).getValue().add(t.getWithdrawalAmount()));
+			} else {
+				if(t.getCategory().equals("UPI\r"))
+					topKeyWords.put(t.getKeyword(), new KeyWord(t.getKeyword().split("@").length>1?t.getKeyword().split("@")[0]:t.getKeyword(),t.getCategory(),t.getWithdrawalAmount()));
+				else
+					topKeyWords.put(t.getKeyword(), new KeyWord(t.getKeyword(),t.getCategory(),t.getWithdrawalAmount()));
+			}
+		});
+		LinkedHashMap<String, KeyWord> sortedTopKeyWords = topKeyWords.entrySet().stream()
+				.filter(t -> !t.getValue().equals(new BigDecimal("0.00")))
+				.sorted(Map.Entry.<String, KeyWord>comparingByValue().reversed()).limit(30)
+				.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e2, LinkedHashMap::new));
+		return new ArrayList<KeyWord>(sortedTopKeyWords.values());
 	}
 
 	public Map<String, Object> expenseDailyData(List<Transaction> tList) {

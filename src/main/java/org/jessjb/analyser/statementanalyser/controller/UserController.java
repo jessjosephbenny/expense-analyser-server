@@ -25,4 +25,10 @@ public class UserController {
 		user.setPassword(bCryptPasswordEncoder.encode(user.getPassword()));
 		applicationUserRepository.save(user);
 	}
+	@PostMapping("/reset-password")
+	public void resetPassword(@RequestBody ApplicationUser user) {
+		ApplicationUser oldUser = applicationUserRepository.findByUsername(user.getUsername());
+		oldUser.setPassword(bCryptPasswordEncoder.encode(user.getPassword()));
+		applicationUserRepository.save(oldUser);
+	}
 }

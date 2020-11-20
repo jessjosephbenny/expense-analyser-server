@@ -18,23 +18,21 @@ import org.springframework.web.multipart.MultipartFile;
 
 @CrossOrigin
 @RestController
-public class StatementController {
+public class ExpenseController {
 	
 	@Autowired
 	ExpenseService expenseService;
 	
 	@GetMapping("/getExpenseData")
-	public Map<String,Object> getExpenseData(SecurityContextHolderAwareRequestWrapper req) {
-		System.out.println(req.getRemoteUser());
-		File pdfFile = new File("C:\\Users\\jessj\\Downloads\\5010XXXXXX0260_4d008e10_30Sep2018_TO_26Jun2020_084838941_unlocked.pdf");
-		return expenseService.getGuestData(pdfFile);
+	public Map<String,Object> getExpenseData(HttpServletRequest req) {
+		return expenseService.getExpenseData(req.getRemoteUser());
 	}
 	
 	@PostMapping("/uploadStatement")
-	public Map<String,Object> handleStatementUpload(@RequestParam("file") MultipartFile file,HttpServletRequest req) throws IllegalStateException, IOException {
+	public Map<String,Object> handleStatementUpload(@RequestParam("file") MultipartFile file, @RequestParam("format") String format,HttpServletRequest req) throws IllegalStateException, IOException {
 		System.out.println(file.getOriginalFilename());
 		File pdfFile = new File(System.getProperty("java.io.tmpdir")+"/"+file.getOriginalFilename());
 		file.transferTo(pdfFile);
-		return expenseService.getGuestData(pdfFile);
+		return expenseService.saveAndGetExpenseData(pdfFile,format,req.getRemoteUser());
 	}
 }
