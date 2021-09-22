@@ -29,3 +29,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Security ###
+/src/main/resources/application.properties
+/src/main/java/org/jessjb/analyser/statementanalyser/security/SecurityConstants.java
